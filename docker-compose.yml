@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: pixelgrid-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pixelgrid
+      POSTGRES_USER: pixelgrid
+      POSTGRES_PASSWORD: pixelgrid
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pixelgrid -d pixelgrid"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pixelgrid-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: "8080"
+      DATABASE_URL: postgres://pixelgrid:pixelgrid@db:5432/pixelgrid?sslmode=disable
+      CORS_ALLOWED_ORIGINS: https://app.keitan1130.com,http://localhost:5173
+    ports:
+      - "8080:8080"
+
+volumes:
+  db_data:
