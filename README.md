@@ -41,6 +41,9 @@ curl -s -X POST "http://localhost:8080/api/v1/cell" \
 - PORT (default: 8080)
 - DATABASE_URL (default points to db service in compose)
 - CORS_ALLOWED_ORIGINS (comma-separated, default: https://app.keitan1130.com,http://localhost:5173)
+- TRUSTED_PROXY_CIDRS (comma-separated CIDRs. Forwarded IP headers are trusted only when RemoteAddr is in this list)
+- MARKITDOWN_ALLOWED_DOMAINS (comma-separated allowlist for URL input hostnames, default: youtube.com,youtu.be)
+- MARKITDOWN_TIMEOUT_SECONDS (integer seconds for conversion timeout, default: 30)
 
 ## Notes for Cloudflare Tunnel
 
