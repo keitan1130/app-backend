@@ -49,3 +49,16 @@ curl -s -X POST "http://localhost:8080/api/v1/cell" \
 
 Keep your existing Cloudflare Tunnel route to this backend origin (for example localhost:8080 on the host where docker compose runs).
 No application changes are required if tunnel routing is already configured for api.keitan1130.com.
+
+## MarkItDown image behavior
+
+This backend calls MarkItDown via CLI (`markitdown <file>`).
+
+- PDF/Office files usually return extracted text with this setup.
+- Image files can return an empty result when there is no EXIF metadata and no OCR/caption backend is configured.
+
+If you need text extraction from photos/images, follow MarkItDown upstream guidance:
+
+- Install and use an OCR backend such as Azure Document Intelligence.
+- Or use the Python API with `llm_client` + `llm_model` (for image descriptions / vision extraction).
+- Keep `exiftool` available when you need metadata extraction from images.

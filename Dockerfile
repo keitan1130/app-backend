@@ -14,7 +14,10 @@ ENV PORT=8080
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8080
 
-RUN pip install --no-cache-dir "markitdown[all]" \
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends libimage-exiftool-perl \
+	&& rm -rf /var/lib/apt/lists/* \
+	&& pip install --no-cache-dir "markitdown[all]" \
 	&& useradd --system --no-create-home --uid 10001 appuser
 
 COPY --from=builder /out/server /server

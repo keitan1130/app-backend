@@ -44,6 +44,8 @@ func (a *application) markItDownHandler(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 
+		markdown = applyImageEmptyResultFallback(markdown, filename)
+
 		a.respondJSON(w, http.StatusOK, markItDownResponse{OK: true, Filename: filename, Markdown: markdown})
 		return
 	}
@@ -107,6 +109,8 @@ func (a *application) markItDownHandler(w http.ResponseWriter, r *http.Request) 
 		a.respondError(w, r, http.StatusInternalServerError, "internal_error", "failed to convert file with markitdown", err, nil, nil)
 		return
 	}
+
+	markdown = applyImageEmptyResultFallback(markdown, filename)
 
 	a.respondJSON(w, http.StatusOK, markItDownResponse{OK: true, Filename: filename, Markdown: markdown})
 }
@@ -345,4 +349,35 @@ func runMarkItDown(ctx context.Context, filePath string) (string, error) {
 	}
 
 	return "", lastErr
+}
+
+func applyImageEmptyResultFallback(markdown string, filename string) string {
+	if strings.TrimSpace(markdown) != "" {
+		return markdown
+	}
+
+	if !isLikelyImageFilename(filename) {
+		return markdown
+	}
+
+	return strings.Join([]string{
+		"No extractable text was returned for this image.",
+		"",
+		"MarkItDown CLI may return empty output for images when EXIF metadata is unavailable and no OCR/caption backend is configured.",
+		"",
+		"Try one of the following:",
+		"- Install exiftool to extract image metadata.",
+		"- Use MarkItDown Python API with llm_client + llm_model for image descriptions.",
+		"- Use Azure Document Intelligence mode for OCR.",
+	}, "\n")
+}
+
+func isLikelyImageFilename(filename string) bool {
+	ext := strings.ToLower(strings.TrimSpace(filepath.Ext(filename)))
+	switch ext {
+	case ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp", ".gif":
+		return true
+	default:
+		return false
+	}
 }
