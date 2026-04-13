@@ -33,7 +33,6 @@ func loadConfig() config {
 	}
 
 	trustedProxyCIDRs := parseTrustedProxyCIDRs(os.Getenv("TRUSTED_PROXY_CIDRS"))
-	domains := parseMarkItDownDomains(os.Getenv("MARKITDOWN_ALLOWED_DOMAINS"))
 	markItDownTimeout := parseMarkItDownTimeout(os.Getenv("MARKITDOWN_TIMEOUT_SECONDS"))
 
 	return config{
@@ -41,7 +40,6 @@ func loadConfig() config {
 		DatabaseURL:            databaseURL,
 		AllowedOrigins:         allowedOrigins,
 		TrustedProxyCIDRs:      trustedProxyCIDRs,
-		MarkItDownDomains:      domains,
 		MarkItDownTimeout:      markItDownTimeout,
 		MarkItDownWriteTimeout: markItDownTimeout + markItDownWriteTimeoutPad,
 	}
@@ -67,24 +65,6 @@ func parseTrustedProxyCIDRs(raw string) []*net.IPNet {
 	}
 
 	return trusted
-}
-
-func parseMarkItDownDomains(raw string) map[string]struct{} {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		raw = defaultMarkItDownDomains
-	}
-
-	domains := map[string]struct{}{}
-	for _, part := range strings.Split(raw, ",") {
-		domain := normalizeDomain(part)
-		if domain == "" {
-			continue
-		}
-		domains[domain] = struct{}{}
-	}
-
-	return domains
 }
 
 func parseMarkItDownTimeout(raw string) time.Duration {

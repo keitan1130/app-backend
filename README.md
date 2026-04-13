@@ -42,7 +42,6 @@ curl -s -X POST "http://localhost:8080/api/v1/cell" \
 - DATABASE_URL (default points to db service in compose)
 - CORS_ALLOWED_ORIGINS (comma-separated, default: https://app.keitan1130.com,http://localhost:5173)
 - TRUSTED_PROXY_CIDRS (comma-separated CIDRs. Forwarded IP headers are trusted only when RemoteAddr is in this list)
-- MARKITDOWN_ALLOWED_DOMAINS (comma-separated allowlist for URL input hostnames, default: youtube.com,youtu.be)
 - MARKITDOWN_TIMEOUT_SECONDS (integer seconds for conversion timeout, default: 30)
 
 ## Notes for Cloudflare Tunnel
@@ -50,15 +49,10 @@ curl -s -X POST "http://localhost:8080/api/v1/cell" \
 Keep your existing Cloudflare Tunnel route to this backend origin (for example localhost:8080 on the host where docker compose runs).
 No application changes are required if tunnel routing is already configured for api.keitan1130.com.
 
-## MarkItDown image behavior
+## MarkItDown supported formats
 
 This backend calls MarkItDown via CLI (`markitdown <file>`).
 
-- PDF/Office files usually return extracted text with this setup.
-- Image files can return an empty result when there is no EXIF metadata and no OCR/caption backend is configured.
-
-If you need text extraction from photos/images, follow MarkItDown upstream guidance:
-
-- Install and use an OCR backend such as Azure Document Intelligence.
-- Or use the Python API with `llm_client` + `llm_model` (for image descriptions / vision extraction).
-- Keep `exiftool` available when you need metadata extraction from images.
+- File upload: PDF / PowerPoint / Word / Excel / HTML / CSV / JSON / XML
+- Manual input (`application/json` with `input`): HTML / CSV / JSON / XML text only
+- URL, image, audio, ZIP, EPub inputs are rejected

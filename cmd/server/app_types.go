@@ -16,11 +16,9 @@ const (
 	defaultDatabaseURL                = "postgres://pixelgrid:pixelgrid@db:5432/pixelgrid?sslmode=disable"
 	defaultAllowedOrigins             = "https://app.keitan1130.com,http://localhost:5173"
 	defaultTrustedProxyCIDRs          = ""
-	defaultMarkItDownDomains          = "youtube.com,youtu.be"
 	defaultMarkItDownTimeoutSec       = 30
 	requestBodyMaxBytes         int64 = 16 * 1024
 	markItDownMaxBytes          int64 = 25 * 1024 * 1024
-	markItDownDNSResolveTimeout       = 3 * time.Second
 	markItDownWriteTimeoutPad         = 10 * time.Second
 )
 
@@ -35,7 +33,6 @@ type config struct {
 	DatabaseURL            string
 	AllowedOrigins         map[string]struct{}
 	TrustedProxyCIDRs      []*net.IPNet
-	MarkItDownDomains      map[string]struct{}
 	MarkItDownTimeout      time.Duration
 	MarkItDownWriteTimeout time.Duration
 }

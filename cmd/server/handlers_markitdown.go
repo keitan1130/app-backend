@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -20,13 +20,28 @@ type markItDownInputRequest struct {
 	Input string `json:"input"`
 }
 
+var allowedMarkItDownFileExtensions = map[string]struct{}{
+	".pdf":  {},
+	".ppt":  {},
+	".pptx": {},
+	".doc":  {},
+	".docx": {},
+	".xls":  {},
+	".xlsx": {},
+	".html": {},
+	".htm":  {},
+	".csv":  {},
+	".json": {},
+	".xml":  {},
+}
+
 func (a *application) markItDownHandler(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, markItDownMaxBytes)
 	defer r.Body.Close()
 	contentType := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
 
 	if strings.HasPrefix(contentType, "application/json") {
-		sourceArg, filename, cleanup, err := parseMarkItDownJSONInput(r, a.cfg.MarkItDownDomains)
+		sourceArg, filename, cleanup, err := parseMarkItDownJSONInput(r)
 		if err != nil {
 			a.respondError(w, r, http.StatusBadRequest, "invalid_request", err.Error(), nil, nil, nil)
 			return
@@ -80,6 +95,11 @@ func (a *application) markItDownHandler(w http.ResponseWriter, r *http.Request) 
 		ext = ""
 	}
 
+	if !isAllowedMarkItDownExtension(ext) {
+		a.respondError(w, r, http.StatusBadRequest, "invalid_request", "unsupported file type: only PDF, PowerPoint, Word, Excel, HTML, CSV, JSON, XML are allowed", nil, nil, nil)
+		return
+	}
+
 	tempFile, err := os.CreateTemp("", "markitdown-*"+ext)
 	if err != nil {
 		a.respondError(w, r, http.StatusInternalServerError, "internal_error", "failed to create temporary file", err, nil, nil)
@@ -115,7 +135,7 @@ func (a *application) markItDownHandler(w http.ResponseWriter, r *http.Request) 
 	a.respondJSON(w, http.StatusOK, markItDownResponse{OK: true, Filename: filename, Markdown: markdown})
 }
 
-func parseMarkItDownJSONInput(r *http.Request, allowedDomains map[string]struct{}) (sourceArg string, filename string, cleanup func(), err error) {
+func parseMarkItDownJSONInput(r *http.Request) (sourceArg string, filename string, cleanup func(), err error) {
 	var req markItDownInputRequest
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
@@ -129,13 +149,15 @@ func parseMarkItDownJSONInput(r *http.Request, allowedDomains map[string]struct{
 	}
 
 	if isHTTPURL(input) {
-		if err := validateMarkItDownURL(r.Context(), input, allowedDomains); err != nil {
-			return "", "", nil, err
-		}
-		return input, deriveFilenameFromURL(input), nil, nil
+		return "", "", nil, errors.New("URL input is not supported: only HTML, CSV, JSON, XML text is allowed")
 	}
 
-	tempFile, err := os.CreateTemp("", "markitdown-input-*.txt")
+	manualExt := detectManualTextExtension(input)
+	if manualExt == "" {
+		return "", "", nil, errors.New("manual input must be HTML, CSV, JSON, or XML text")
+	}
+
+	tempFile, err := os.CreateTemp("", "markitdown-input-*"+manualExt)
 	if err != nil {
 		return "", "", nil, fmt.Errorf("failed to create temporary input file: %w", err)
 	}
@@ -152,9 +174,91 @@ func parseMarkItDownJSONInput(r *http.Request, allowedDomains map[string]struct{
 		return "", "", nil, fmt.Errorf("failed to finalize temporary input file: %w", err)
 	}
 
-	return tempFilePath, "manual-input.txt", func() {
+	return tempFilePath, "manual-input" + manualExt, func() {
 		_ = os.Remove(tempFilePath)
 	}, nil
+}
+
+func detectManualTextExtension(input string) string {
+	trimmed := strings.TrimSpace(input)
+	if trimmed == "" {
+		return ""
+	}
+
+	if json.Valid([]byte(trimmed)) {
+		return ".json"
+	}
+
+	if looksLikeHTML(trimmed) {
+		return ".html"
+	}
+
+	if looksLikeXML(trimmed) {
+		return ".xml"
+	}
+
+	if looksLikeCSV(trimmed) {
+		return ".csv"
+	}
+
+	return ""
+}
+
+func looksLikeXML(input string) bool {
+	if !strings.HasPrefix(input, "<") || !strings.HasSuffix(input, ">") {
+		return false
+	}
+
+	decoder := xml.NewDecoder(strings.NewReader(input))
+	for {
+		_, err := decoder.Token()
+		if err == nil {
+			continue
+		}
+		if errors.Is(err, io.EOF) {
+			return true
+		}
+		return false
+	}
+}
+
+func looksLikeHTML(input string) bool {
+	lower := strings.ToLower(strings.TrimSpace(input))
+	if strings.HasPrefix(lower, "<!doctype html") || strings.HasPrefix(lower, "<html") {
+		return true
+	}
+
+	if strings.Contains(lower, "</html>") || strings.Contains(lower, "<body") || strings.Contains(lower, "<head") {
+		return true
+	}
+
+	return false
+}
+
+func looksLikeCSV(input string) bool {
+	if !strings.Contains(input, ",") {
+		return false
+	}
+
+	lines := strings.Split(input, "\n")
+	nonEmpty := 0
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		nonEmpty++
+		if nonEmpty >= 2 {
+			return true
+		}
+	}
+
+	return false
+}
+
+func isAllowedMarkItDownExtension(ext string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(ext))
+	_, ok := allowedMarkItDownFileExtensions[normalized]
+	return ok
 }
 
 func isHTTPURL(input string) bool {
@@ -169,140 +273,6 @@ func isHTTPURL(input string) bool {
 		return false
 	}
 	return parsed.Hostname() != ""
-}
-
-func validateMarkItDownURL(ctx context.Context, rawURL string, allowedDomains map[string]struct{}) error {
-	parsed, err := url.Parse(strings.TrimSpace(rawURL))
-	if err != nil || parsed == nil {
-		return errors.New("invalid URL")
-	}
-
-	host := normalizeDomain(parsed.Hostname())
-	if host == "" {
-		return errors.New("URL host is required")
-	}
-
-	if host == "localhost" {
-		return errors.New("localhost URL is not allowed")
-	}
-
-	if !isAllowedDomain(host, allowedDomains) {
-		return errors.New("URL domain is not allowed")
-	}
-
-	if parsedIP := net.ParseIP(host); parsedIP != nil {
-		if isBlockedTargetIP(parsedIP) {
-			return errors.New("URL resolves to a disallowed network")
-		}
-		return nil
-	}
-
-	resolveCtx, cancel := context.WithTimeout(ctx, markItDownDNSResolveTimeout)
-	defer cancel()
-
-	ips, err := net.DefaultResolver.LookupIPAddr(resolveCtx, host)
-	if err != nil || len(ips) == 0 {
-		return errors.New("failed to resolve URL hostname")
-	}
-
-	for _, ipAddr := range ips {
-		if isBlockedTargetIP(ipAddr.IP) {
-			return errors.New("URL resolves to a disallowed network")
-		}
-	}
-
-	return nil
-}
-
-func isAllowedDomain(host string, allowedDomains map[string]struct{}) bool {
-	if len(allowedDomains) == 0 {
-		return false
-	}
-
-	for domain := range allowedDomains {
-		if domain == "" {
-			continue
-		}
-		if host == domain || strings.HasSuffix(host, "."+domain) {
-			return true
-		}
-	}
-
-	return false
-}
-
-func normalizeDomain(input string) string {
-	return strings.Trim(strings.ToLower(strings.TrimSpace(input)), ".")
-}
-
-func isBlockedTargetIP(ip net.IP) bool {
-	if ip == nil {
-		return true
-	}
-
-	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsMulticast() || ip.IsInterfaceLocalMulticast() {
-		return true
-	}
-
-	if v4 := ip.To4(); v4 != nil {
-		if v4[0] == 100 && v4[1] >= 64 && v4[1] <= 127 {
-			return true
-		}
-		if v4[0] == 198 && (v4[1] == 18 || v4[1] == 19) {
-			return true
-		}
-	}
-
-	return false
-}
-
-func deriveFilenameFromURL(rawURL string) string {
-	parsed, err := url.Parse(strings.TrimSpace(rawURL))
-	if err != nil {
-		return "source-url"
-	}
-
-	base := filepath.Base(strings.TrimSpace(parsed.Path))
-	if base == "" || base == "." || base == "/" {
-		host := strings.TrimSpace(parsed.Hostname())
-		if host == "" {
-			return "source-url"
-		}
-		return sanitizeFilename(host)
-	}
-
-	return sanitizeFilename(base)
-}
-
-func sanitizeFilename(input string) string {
-	input = strings.TrimSpace(input)
-	if input == "" {
-		return "source"
-	}
-
-	b := strings.Builder{}
-	b.Grow(len(input))
-	for _, r := range input {
-		switch {
-		case r >= 'a' && r <= 'z':
-			b.WriteRune(r)
-		case r >= 'A' && r <= 'Z':
-			b.WriteRune(r)
-		case r >= '0' && r <= '9':
-			b.WriteRune(r)
-		case r == '-' || r == '_' || r == '.':
-			b.WriteRune(r)
-		default:
-			b.WriteRune('-')
-		}
-	}
-
-	out := strings.Trim(b.String(), "-._")
-	if out == "" {
-		return "source"
-	}
-
-	return out
 }
 
 func runMarkItDown(ctx context.Context, filePath string) (string, error) {
