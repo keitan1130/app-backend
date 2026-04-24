@@ -18,6 +18,9 @@ Implemented:
 
 ## Local run (Docker)
 
+0. Create env file:
+   cp .env.example .env
+   # set POSTGRES_PASSWORD to a strong random value before first start
 1. Start containers:
    docker compose up -d --build
 2. Check health:
@@ -38,11 +41,14 @@ curl -s -X POST "http://localhost:8080/api/v1/cell" \
 
 ## Environment variables
 
-- PORT (default: 8080)
-- DATABASE_URL (default points to db service in compose)
-- CORS_ALLOWED_ORIGINS (comma-separated, default: https://app.keitan1130.com,http://localhost:5173)
+- PORT (app default: 8080, but docker compose now requires explicit value in .env)
+- DATABASE_URL (app default points to db service in compose)
+- CORS_ALLOWED_ORIGINS (app default: https://app.keitan1130.com,http://localhost:5173, but docker compose requires explicit value in .env)
 - TRUSTED_PROXY_CIDRS (comma-separated CIDRs. Forwarded IP headers are trusted only when RemoteAddr is in this list)
 - MARKITDOWN_TIMEOUT_SECONDS (integer seconds for conversion timeout, default: 30)
+
+For Docker compose, set `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `PORT`, and `CORS_ALLOWED_ORIGINS` in `.env`.
+Do not commit `.env` to Git.
 
 ## Notes for Cloudflare Tunnel
 
